@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Celeste Browser Clone</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="scene-shell">
+        <canvas id="gameCanvas"></canvas>
+        <div id="ui">
+            <div id="deaths">Deaths: 0</div>
+            <div id="timer">Time: 0.00s</div>
+            <div id="strawberries">Strawberries: 0/0</div>
+            <div id="dashes">Dashes: 1/1</div>
+            <div id="room-name">Prologue</div>
+        </div>
+        <div id="controls-help">
+            <span>WASD/Arrows: Move</span>
+            <span>Z: Jump</span>
+            <span>X: Dash</span>
+            <span>C: Climb</span>
+            <span>ESC: Pause</span>
+            <span>R: Respawn</span>
+        </div>
+        <div id="touch-controls" role="group" aria-label="Touch controls">
+            <button type="button" class="touch-pause" data-input="pause" aria-label="Pause">&#10074;&#10074;</button>
+            <div class="touch-directional">
+                <button type="button" class="touch-btn touch-up" data-input="up" aria-label="Move up">&#9650;</button>
+                <div class="touch-mid-row">
+                    <button type="button" class="touch-btn touch-left" data-input="left" aria-label="Move left">&#9664;</button>
+                    <button type="button" class="touch-btn touch-down" data-input="down" aria-label="Move down">&#9660;</button>
+                    <button type="button" class="touch-btn touch-right" data-input="right" aria-label="Move right">&#9654;</button>
+                </div>
+            </div>
+            <div class="touch-actions">
+                <button type="button" class="touch-btn" data-input="climb" aria-label="Climb">C</button>
+                <button type="button" class="touch-btn" data-input="jump" aria-label="Jump">J</button>
+                <button type="button" class="touch-btn" data-input="dash" aria-label="Dash">D</button>
+            </div>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
