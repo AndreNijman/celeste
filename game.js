@@ -43,6 +43,49 @@ let totalStrawberries = 0;
 let collectedStrawberries = 0;
 let isPlaying = true;
 let isPaused = false;
+let pauseSelection = 0;
+const PAUSE_CHOICES = [
+    { label: 'Resume', hint: 'ESC', act: 'resume' },
+    { label: 'Restart Room', hint: 'R', act: 'restart' },
+    { label: 'Achievements', hint: 'A', act: 'achievements' },
+    { label: 'Options', hint: 'O', act: 'options' },
+    { label: 'Quit to Menu', hint: 'Q', act: 'quit' },
+];
+
+function executePauseChoice(act) {
+    playSound('menuSelect');
+    switch (act) {
+        case 'resume':
+            isPaused = false;
+            input.jumpPressed = false;
+            input.dashPressed = false;
+            input.enterPressed = false;
+            player.jumpBufferTimer = 0;
+            break;
+        case 'restart':
+            restartCurrentRoom();
+            isPaused = false;
+            break;
+        case 'achievements':
+            isPaused = false;
+            returnToStateAfterOptions = 'playing';
+            gameState = 'achievements';
+            achievementScroll = 0;
+            break;
+        case 'options':
+            isPaused = false;
+            returnToStateAfterOptions = 'playing';
+            gameState = 'options';
+            menuSelection = 0;
+            break;
+        case 'quit':
+            saveGame();
+            isPaused = false;
+            gameState = 'menu';
+            menuSelection = 0;
+            break;
+    }
+}
 let currentRoom = 'prologue';
 let roomTransition = null;
 let screenShake = 0;
@@ -76,6 +119,7 @@ let browserChromeActive = null;
 let returnToStateAfterOptions = null;
 
 let chapterSelectIndex = 0;
+let chapterSelectFocus = 'card';
 
 let endingPhase = 0;
 let endingTimer = 0;
@@ -141,6 +185,7 @@ const input = {
     jump: false, dash: false, climb: false,
     jumpPressed: false, dashPressed: false, climbPressed: false,
     tutorialSkipPressed: false,
+    enterPressed: false,
     pausePressed: false,
     upPressed: false, downPressed: false,
     leftPressed: false, rightPressed: false,
@@ -5710,33 +5755,37 @@ function drawUI() {
         ctx.font = '14px monospace';
         ctx.fillText(`Deaths: ${deaths}    Time: ${gameTime.toFixed(2)}s`, canvas.width/2, statsY);
 
-        const pauseChoices = [
-            { label: 'Resume', hint: 'ESC', act: 'resume' },
-            { label: 'Restart Room', hint: 'R', act: 'restart' },
-            { label: 'Achievements', hint: 'A', act: 'achievements' },
-            { label: 'Options', hint: 'O', act: 'options' },
-            { label: 'Quit to Menu', hint: 'Q', act: 'quit' },
-        ];
         const btnW = Math.min(260, canvas.width * 0.5);
         const btnH = 28;
         const btnX = canvas.width / 2 - btnW / 2;
         let by = canvas.height / 2 - 80;
-        for (const choice of pauseChoices) {
-            ctx.fillStyle = 'rgba(28,36,66,0.9)';
+        pauseSelection = Math.max(0, Math.min(pauseSelection, PAUSE_CHOICES.length - 1));
+        for (let i = 0; i < PAUSE_CHOICES.length; i++) {
+            const choice = PAUSE_CHOICES[i];
+            const isSelected = i === pauseSelection;
+            ctx.fillStyle = isSelected ? 'rgba(50, 75, 145, 0.95)' : 'rgba(28, 36, 66, 0.9)';
             ctx.fillRect(btnX, by, btnW, btnH);
-            ctx.strokeStyle = 'rgba(170,200,255,0.4)';
+            ctx.strokeStyle = isSelected ? '#ffee77' : 'rgba(170, 200, 255, 0.4)';
+            ctx.lineWidth = isSelected ? 2 : 1;
             ctx.strokeRect(btnX + 0.5, by + 0.5, btnW - 1, btnH - 1);
-            ctx.fillStyle = '#e8efff';
-            ctx.font = '14px monospace';
-            ctx.fillText(choice.label, canvas.width / 2 - 14, by + 20);
-            ctx.fillStyle = 'rgba(150,175,220,0.7)';
+            ctx.fillStyle = isSelected ? '#ffffbb' : '#e8efff';
+            ctx.font = `${isSelected ? 'bold ' : ''}14px monospace`;
+            ctx.textAlign = 'center';
+            const labelText = isSelected ? `> ${choice.label} <` : choice.label;
+            ctx.fillText(labelText, canvas.width / 2 - 14, by + 20);
+            ctx.fillStyle = isSelected ? 'rgba(255, 235, 160, 0.95)' : 'rgba(150, 175, 220, 0.7)';
             ctx.font = '10px monospace';
             ctx.textAlign = 'right';
             ctx.fillText(choice.hint, btnX + btnW - 10, by + 19);
             ctx.textAlign = 'center';
-            addHitArea(btnX, by, btnW, btnH, { type: 'pause', act: choice.act });
+            addHitArea(btnX, by, btnW, btnH, { type: 'pause', act: choice.act, index: i });
             by += btnH + 12;
         }
+
+        ctx.fillStyle = '#788bb0';
+        ctx.font = '11px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('Up/Down: Navigate  |  Enter/Space: Select  |  ESC: Resume', canvas.width / 2, canvas.height * 0.83);
     }
 
     if (gameWon && gameState !== 'ending') {
@@ -5767,7 +5816,7 @@ function drawUI() {
         ctx.fillText(`Deaths: ${deaths}`, canvas.width/2, canvas.height/2 + 60);
         ctx.fillText(`Time: ${gameTime.toFixed(2)}s`, canvas.width/2, canvas.height/2 + 90);
         ctx.font = '14px monospace';
-        ctx.fillText('Press ESC to restart', canvas.width/2, canvas.height/2 + 130);
+        ctx.fillText('Press Enter, Space or ESC to restart', canvas.width/2, canvas.height/2 + 130);
         addHitArea(canvas.width * 0.3, canvas.height/2 + 110, canvas.width * 0.4, 40, { type: 'restart-run' });
     }
 
@@ -6084,7 +6133,7 @@ function drawAchievements() {
     ctx.strokeRect(backBtnX, backBtnY, backBtnW, backBtnH);
     ctx.fillStyle = '#ffdd66';
     ctx.font = `${compact ? 10 : 12}px monospace`;
-    ctx.fillText('BACK (ESC)', viewW / 2, backBtnY + (compact ? 13 : 17));
+    ctx.fillText('BACK (ESC / ENTER)', viewW / 2, backBtnY + (compact ? 13 : 17));
     addHitArea(backBtnX, backBtnY, backBtnW, backBtnH, { type: 'achievements-back' });
 }
 
@@ -6115,6 +6164,16 @@ function getAccessibilityOptions() {
                     playSound('death');
                 }
             }
+        },
+        {
+            label: 'Back to Menu',
+            isAction: true,
+            isBack: true,
+            toggle: () => {
+                gameState = returnToStateAfterOptions === 'playing' ? 'playing' : 'menu';
+                if (returnToStateAfterOptions !== 'playing' && gameState === 'menu') menuSelection = 0;
+                returnToStateAfterOptions = null;
+            }
         }
     ];
 }
@@ -6126,12 +6185,12 @@ function drawOptions() {
     ctx.fillStyle = '#ff88ff';
     ctx.font = '32px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('OPTIONS', canvas.width/2, canvas.height/2 - 110);
+    ctx.fillText('OPTIONS', canvas.width/2, canvas.height/2 - 125);
 
     const options = getAccessibilityOptions();
     options.forEach((opt, i) => {
-        const y = canvas.height/2 - 60 + i * 36;
-        addHitArea(canvas.width / 2 - 170, y - 14, 340, 28, { type: 'option', index: i });
+        const y = canvas.height/2 - 75 + i * 30;
+        addHitArea(canvas.width / 2 - 170, y - 14, 340, 26, { type: 'option', index: i });
         if (i === menuSelection) {
             ctx.fillStyle = '#ffff88';
             if (opt.isAction) {
@@ -6141,7 +6200,7 @@ function drawOptions() {
             }
         } else {
             if (opt.isAction) {
-                ctx.fillStyle = confirmResetProgress ? '#ff4444' : '#aaaaaa';
+                ctx.fillStyle = opt.isBack ? '#ffdd66' : (confirmResetProgress ? '#ff4444' : '#aaaaaa');
                 ctx.fillText(opt.label, canvas.width/2, y);
             } else {
                 ctx.fillStyle = opt.value ? '#88ff88' : '#ff8888';
@@ -6152,8 +6211,8 @@ function drawOptions() {
 
     ctx.fillStyle = '#666666';
     ctx.font = '12px monospace';
-    ctx.fillText('Up/Down: Navigate  |  Space/Enter or Click: Toggle  |  ESC: Back', canvas.width/2, canvas.height - 35);
-    addHitArea(canvas.width / 2 - 90, canvas.height - 45, 180, 24, { type: 'options-back' });
+    ctx.fillText('Up/Down: Navigate  |  Left/Right/Enter: Toggle  |  ESC: Back', canvas.width/2, canvas.height - 25);
+    addHitArea(canvas.width / 2 - 90, canvas.height - 35, 180, 24, { type: 'options-back' });
 }
 
 function drawChapterPostcard(room, chapter, x, y, w, h) {
@@ -6297,8 +6356,13 @@ function drawChapterSelect() {
 
     ctx.fillStyle = 'rgba(0,0,0,0.48)';
     ctx.fillRect(cardX + (compact ? 4 : 8), cardY + (compact ? 4 : 8), cardW, cardH);
-    ctx.fillStyle = '#e8e4da';
+    ctx.fillStyle = (chapterSelectFocus === 'card') ? '#ffea70' : '#e8e4da';
     ctx.fillRect(cardX - 4, cardY - 4, cardW + 8, cardH + 8);
+    if (chapterSelectFocus === 'card') {
+        ctx.strokeStyle = '#ffee77';
+        ctx.lineWidth = compact ? 1 : 2;
+        ctx.strokeRect(cardX - 5.5, cardY - 5.5, cardW + 11, cardH + 11);
+    }
     ctx.fillStyle = '#1d2034';
     ctx.fillRect(cardX - 2, cardY - 2, cardW + 4, cardH + 4);
     drawChapterPostcard(rooms[chapter.id], chapter, cardX, cardY, cardW, cardH);
@@ -6322,9 +6386,9 @@ function drawChapterSelect() {
     ctx.fillStyle = 'rgba(214,224,244,0.52)';
     ctx.font = `${compact ? 6 : 10}px monospace`;
     ctx.textAlign = 'right';
-    ctx.fillText(`^ ${previous.name}`, cardX - (compact ? 8 : 18), cardY + cardH / 2);
+    ctx.fillText(`< ${previous.name}`, cardX - (compact ? 8 : 18), cardY + cardH / 2);
     ctx.textAlign = 'left';
-    ctx.fillText(`${next.name} v`, cardX + cardW + (compact ? 8 : 18), cardY + cardH / 2);
+    ctx.fillText(`${next.name} >`, cardX + cardW + (compact ? 8 : 18), cardY + cardH / 2);
     addHitArea(0, cardY, Math.max(30, cardX - 10), cardH, { type: 'chapter', act: 'prev' });
     addHitArea(cardX + cardW + 10, cardY, Math.max(30, viewW - (cardX + cardW) - 10), cardH, { type: 'chapter', act: 'next' });
     addHitArea(cardX - 4, cardY - 4, cardW + 8, cardH + 8, { type: 'chapter', act: 'start' });
@@ -6362,10 +6426,27 @@ function drawChapterSelect() {
         addHitArea(dotX - 5, dotY - 9, dotSize + 10, 18, { type: 'chapter', act: 'goto', index: i });
     }
 
+    const isBackSelected = chapterSelectFocus === 'back';
+    const backBtnW = compact ? 90 : 130;
+    const backBtnH = compact ? 16 : 22;
+    const backBtnX = viewW / 2 - backBtnW / 2;
+    const backBtnY = compact ? viewH - 20 : viewH - 32;
+    ctx.fillStyle = isBackSelected ? 'rgba(52, 76, 146, 0.95)' : 'rgba(28, 34, 62, 0.85)';
+    ctx.fillRect(backBtnX, backBtnY, backBtnW, backBtnH);
+    ctx.strokeStyle = isBackSelected ? '#ffee77' : 'rgba(160, 190, 255, 0.45)';
+    ctx.lineWidth = isBackSelected ? 2 : 1;
+    ctx.strokeRect(backBtnX + 0.5, backBtnY + 0.5, backBtnW - 1, backBtnH - 1);
+    ctx.fillStyle = isBackSelected ? '#ffffbb' : '#ffdd66';
+    ctx.font = `${compact ? 9 : 11}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(isBackSelected ? '> BACK TO MENU <' : 'BACK (ESC)', viewW / 2, backBtnY + (compact ? 12 : 15));
+    addHitArea(backBtnX, backBtnY, backBtnW, backBtnH, { type: 'chapter', act: 'back' });
+
     if (!compact) {
         ctx.fillStyle = '#71809f';
         ctx.font = '10px monospace';
-        ctx.fillText('UP / DOWN  CHOOSE     Z / ENTER or CLICK CARD  CLIMB     ESC  BACK', viewW / 2, viewH - 16);
+        ctx.textAlign = 'center';
+        ctx.fillText('ARROWS: Navigate  |  ENTER: Select  |  ESC: Back', viewW / 2, viewH - 8);
     }
 }
 
@@ -6390,7 +6471,7 @@ function drawCredits() {
 
     ctx.fillStyle = '#666666';
     ctx.font = '12px monospace';
-    ctx.fillText('Press ESC to go back', canvas.width/2, canvas.height - 40);
+    ctx.fillText('Press Enter, Space, or ESC to go back', canvas.width/2, canvas.height - 40);
     addHitArea(0, 0, canvas.width, canvas.height, { type: 'credits-back' });
 }
 
@@ -6756,6 +6837,7 @@ function playSound(name) {
 }
 
 function startNewGame() {
+    releaseAllInputs();
     localStorage.removeItem(SAVE_KEY);
     deaths = 0;
     totalStrawberries = 0;
@@ -6793,6 +6875,7 @@ function selectMenuOption() {
         case 'Chapter Select':
             gameState = 'chapterSelect';
             chapterSelectIndex = 0;
+            chapterSelectFocus = 'card';
             break;
         case 'Achievements':
             gameState = 'achievements';
@@ -7063,10 +7146,41 @@ function gameLoop(time) {
                 if (!isPaused) {
                     input.jumpPressed = false;
                     input.dashPressed = false;
+                    input.enterPressed = false;
                     player.jumpBufferTimer = 0;
                 }
             }
             input.pausePressed = false;
+        }
+
+        // Pause menu navigation (when paused in-game)
+        if (gameState === 'playing' && isPaused) {
+            if (input.upPressed) {
+                pauseSelection = (pauseSelection - 1 + PAUSE_CHOICES.length) % PAUSE_CHOICES.length;
+                playSound('menuMove');
+                input.upPressed = false;
+            }
+            if (input.downPressed) {
+                pauseSelection = (pauseSelection + 1) % PAUSE_CHOICES.length;
+                playSound('menuMove');
+                input.downPressed = false;
+            }
+            if (input.jumpPressed || input.dashPressed || input.enterPressed) {
+                input.jumpPressed = false;
+                input.dashPressed = false;
+                input.enterPressed = false;
+                executePauseChoice(PAUSE_CHOICES[pauseSelection].act);
+            }
+        }
+
+        // Victory screen restart
+        if (gameWon && gameState !== 'ending') {
+            if (input.jumpPressed || input.dashPressed || input.enterPressed) {
+                input.jumpPressed = false;
+                input.dashPressed = false;
+                input.enterPressed = false;
+                startNewGame();
+            }
         }
 
         // Menu navigation
@@ -7083,10 +7197,11 @@ function gameLoop(time) {
                 playSound('menuMove');
                 input.downPressed = false;
             }
-            if (input.jumpPressed || input.dashPressed) {
+            if (input.jumpPressed || input.dashPressed || input.enterPressed) {
                 selectMenuOption();
                 input.jumpPressed = false;
                 input.dashPressed = false;
+                input.enterPressed = false;
             }
         }
 
@@ -7107,19 +7222,21 @@ function gameLoop(time) {
                 input.downPressed = false;
                 input.rightPressed = false;
             }
-            if (input.jumpPressed || input.dashPressed) {
+            if (input.jumpPressed || input.dashPressed || input.enterPressed) {
                 gameState = returnToStateAfterOptions === 'playing' ? 'playing' : 'menu';
                 if (returnToStateAfterOptions !== 'playing' && gameState === 'menu') menuSelection = 0;
                 returnToStateAfterOptions = null;
                 playSound('menuSelect');
                 input.jumpPressed = false;
                 input.dashPressed = false;
+                input.enterPressed = false;
             }
         }
 
         // Options menu navigation
         if (gameState === 'options') {
-            const optionCount = getAccessibilityOptions().length;
+            const options = getAccessibilityOptions();
+            const optionCount = options.length;
             menuSelection = Math.min(menuSelection, optionCount - 1);
             if (input.upPressed) {
                 menuSelection = (menuSelection - 1 + optionCount) % optionCount;
@@ -7131,37 +7248,91 @@ function gameLoop(time) {
                 playSound('menuMove');
                 input.downPressed = false;
             }
-            if (input.jumpPressed || input.dashPressed) {
+            if (input.leftPressed || input.rightPressed) {
+                const option = options[menuSelection];
+                if (option && !option.isBack) {
+                    playSound('menuSelect');
+                    option.toggle();
+                    saveGame();
+                }
+                input.leftPressed = false;
+                input.rightPressed = false;
+            }
+            if (input.jumpPressed || input.dashPressed || input.enterPressed) {
                 playSound('menuSelect');
-                const option = getAccessibilityOptions()[menuSelection];
+                const option = options[menuSelection];
                 if (option) option.toggle();
                 saveGame();
                 input.jumpPressed = false;
                 input.dashPressed = false;
+                input.enterPressed = false;
             }
         }
 
         // Chapter Select navigation
         if (gameState === 'chapterSelect') {
-            if (input.upPressed) {
+            if (input.leftPressed) {
                 chapterSelectIndex = (chapterSelectIndex - 1 + chapterList.length) % chapterList.length;
+                chapterSelectFocus = 'card';
                 playSound('menuMove');
+                input.leftPressed = false;
+            }
+            if (input.rightPressed) {
+                chapterSelectIndex = (chapterSelectIndex + 1) % chapterList.length;
+                chapterSelectFocus = 'card';
+                playSound('menuMove');
+                input.rightPressed = false;
+            }
+            if (input.upPressed) {
+                if (chapterSelectFocus === 'back') {
+                    chapterSelectFocus = 'card';
+                    playSound('menuMove');
+                } else {
+                    chapterSelectIndex = (chapterSelectIndex - 1 + chapterList.length) % chapterList.length;
+                    playSound('menuMove');
+                }
                 input.upPressed = false;
             }
             if (input.downPressed) {
-                chapterSelectIndex = (chapterSelectIndex + 1) % chapterList.length;
-                playSound('menuMove');
+                if (chapterSelectFocus === 'card') {
+                    chapterSelectFocus = 'back';
+                    playSound('menuMove');
+                } else {
+                    chapterSelectIndex = (chapterSelectIndex + 1) % chapterList.length;
+                    playSound('menuMove');
+                }
                 input.downPressed = false;
             }
-            if (input.jumpPressed || input.dashPressed) {
-                playSound('menuSelect');
-                startChapter(chapterList[chapterSelectIndex]);
+            if (input.jumpPressed || input.dashPressed || input.enterPressed) {
+                if (chapterSelectFocus === 'back') {
+                    gameState = 'menu';
+                    chapterSelectFocus = 'card';
+                    playSound('menuSelect');
+                } else {
+                    playSound('menuSelect');
+                    startChapter(chapterList[chapterSelectIndex]);
+                }
                 input.jumpPressed = false;
                 input.dashPressed = false;
+                input.enterPressed = false;
             }
             if (input.pausePressed) {
                 gameState = 'menu';
+                chapterSelectFocus = 'card';
                 playSound('menuSelect');
+                input.pausePressed = false;
+            }
+        }
+
+        // Credits screen navigation
+        if (gameState === 'credits') {
+            if (input.jumpPressed || input.dashPressed || input.enterPressed || input.pausePressed) {
+                gameState = 'menu';
+                menuSelection = 0;
+                playSound('menuSelect');
+                input.jumpPressed = false;
+                input.dashPressed = false;
+                input.enterPressed = false;
                 input.pausePressed = false;
             }
         }
@@ -7185,12 +7356,17 @@ function gameLoop(time) {
                 updateParticles(dt);
                 updateShockwaves(dt);
                 updateCamera(dt);
+                input.upPressed = false;
+                input.downPressed = false;
+                input.leftPressed = false;
+                input.rightPressed = false;
             }
         } else if (gameState === 'ending') {
             // Jump/confirm skips the current line.
-            if (input.jumpPressed || input.dashPressed) {
+            if (input.jumpPressed || input.dashPressed || input.enterPressed) {
                 input.jumpPressed = false;
                 input.dashPressed = false;
+                input.enterPressed = false;
                 if (endingPhase < endingMessages.length - 1) {
                     endingPhase++;
                     endingTimer = 0;
@@ -7209,6 +7385,10 @@ function gameLoop(time) {
             } else {
                 gameState = 'credits';
                 menuSelection = 0;
+                input.jumpPressed = false;
+                input.dashPressed = false;
+                input.enterPressed = false;
+                input.pausePressed = false;
             }
         }
 
@@ -7263,6 +7443,15 @@ window.addEventListener('keydown', (e) => {
     }
 
     if (e.code === 'Enter') {
+        input.enterPressed = true;
+        if (gameWon) {
+            startNewGame();
+            return;
+        }
+        if (isPaused) {
+            executePauseChoice(PAUSE_CHOICES[pauseSelection].act);
+            return;
+        }
         if (gameState === 'playing' && currentRoom === 'prologue') {
             input.tutorialSkipPressed = true;
         } else if (gameState !== 'playing') {
@@ -7272,6 +7461,20 @@ window.addEventListener('keydown', (e) => {
     }
 
     if (isPaused) {
+        if (e.code === 'ArrowUp' || e.code === 'KeyW') {
+            pauseSelection = (pauseSelection - 1 + PAUSE_CHOICES.length) % PAUSE_CHOICES.length;
+            playSound('menuMove');
+            return;
+        }
+        if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+            pauseSelection = (pauseSelection + 1) % PAUSE_CHOICES.length;
+            playSound('menuMove');
+            return;
+        }
+        if (e.code === 'Space' || e.code === 'KeyZ' || e.code === 'KeyX') {
+            executePauseChoice(PAUSE_CHOICES[pauseSelection].act);
+            return;
+        }
         if (e.code === 'KeyR') {
             restartCurrentRoom();
             isPaused = false;
@@ -7307,7 +7510,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('keyup', (e) => {
-    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'KeyZ', 'KeyX', 'KeyK', 'ShiftLeft', 'ShiftRight', 'KeyC'].includes(e.code)) {
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'Enter', 'KeyZ', 'KeyX', 'KeyK', 'ShiftLeft', 'ShiftRight', 'KeyC'].includes(e.code)) {
         e.preventDefault();
     }
 
@@ -7319,6 +7522,7 @@ window.addEventListener('keyup', (e) => {
         case 'Space': case 'KeyZ': case 'KeyK': manualInput.jump = false; break;
         case 'KeyX': case 'ShiftLeft': case 'ShiftRight': manualInput.dash = false; break;
         case 'KeyC': manualInput.climb = false; break;
+        case 'Enter': input.enterPressed = false; break;
     }
 });
 
@@ -7487,13 +7691,19 @@ function activateUiAction(action) {
         case 'chapter':
             if (action.act === 'prev' || action.act === 'next') {
                 chapterSelectIndex = (chapterSelectIndex + (action.act === 'next' ? 1 : -1) + chapterList.length) % chapterList.length;
+                chapterSelectFocus = 'card';
                 playSound('menuMove');
             } else if (action.act === 'goto') {
                 chapterSelectIndex = action.index;
+                chapterSelectFocus = 'card';
                 playSound('menuMove');
             } else if (action.act === 'start') {
                 playSound('menuSelect');
                 startChapter(chapterList[chapterSelectIndex]);
+            } else if (action.act === 'back') {
+                playSound('menuSelect');
+                gameState = 'menu';
+                chapterSelectFocus = 'card';
             }
             break;
         case 'credits-back':
@@ -7509,6 +7719,7 @@ function activateUiAction(action) {
                 isPaused = false;
                 input.jumpPressed = false;
                 input.dashPressed = false;
+                input.enterPressed = false;
                 player.jumpBufferTimer = 0;
             } else if (action.act === 'restart') {
                 restartCurrentRoom();
@@ -7543,6 +7754,14 @@ function bindCanvasUi() {
             if (mx >= area.x && mx <= area.x + area.w && my >= area.y && my <= area.y + area.h) {
                 if (area.action.type === 'menu' && gameState === 'menu') menuSelection = area.action.index;
                 else if (area.action.type === 'option' && gameState === 'options') menuSelection = area.action.index;
+                else if (area.action.type === 'pause' && isPaused) {
+                    const idx = PAUSE_CHOICES.findIndex(c => c.act === area.action.act);
+                    if (idx >= 0) pauseSelection = idx;
+                }
+                else if (area.action.type === 'chapter' && gameState === 'chapterSelect') {
+                    if (area.action.act === 'back') chapterSelectFocus = 'back';
+                    else if (area.action.act === 'start') chapterSelectFocus = 'card';
+                }
                 break;
             }
         }
@@ -7593,6 +7812,7 @@ function releaseAllInputs() {
     input.downPressed = false;
     input.leftPressed = false;
     input.rightPressed = false;
+    input.enterPressed = false;
 }
 
 function suspendForBlur() {
