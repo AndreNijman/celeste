@@ -486,7 +486,10 @@ function analyze(roomId) {
     }
 }
 
-for (const id of Object.keys(rooms).sort()) analyze(id);
+const filterRoom = process.argv[2];
+for (const id of Object.keys(rooms).sort()) {
+    if (!filterRoom || id === filterRoom) analyze(id);
+}
 
 // Cross-room integrity
 for (const id of Object.keys(rooms)) {
